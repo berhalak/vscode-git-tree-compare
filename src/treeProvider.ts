@@ -2868,6 +2868,11 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         await config.update('showCheckboxes', !v, true);
     }
 
+    async showHeatmap(v: boolean) {
+        const config = workspace.getConfiguration(NAMESPACE);
+        await config.update('heatmap', v, true);
+    }
+
     async viewAsTree(v: boolean) {
         const config = workspace.getConfiguration(NAMESPACE);
         await config.update('viewMode', v ? 'tree' : 'list', true);

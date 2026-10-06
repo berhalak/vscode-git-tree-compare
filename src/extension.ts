@@ -105,6 +105,12 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(NAMESPACE + '.hideCheckboxes', () => {
         runAfterInit(() => provider!.hideCheckboxes(true));
     });
+    commands.registerCommand(NAMESPACE + '.showHeatmap', () => {
+        runAfterInit(() => provider!.showHeatmap(true));
+    });
+    commands.registerCommand(NAMESPACE + '.hideHeatmap', () => {
+        runAfterInit(() => provider!.showHeatmap(false));
+    });
     commands.registerCommand(NAMESPACE + '.viewAsList', () => {
         runAfterInit(() => provider!.viewAsTree(false));
     });

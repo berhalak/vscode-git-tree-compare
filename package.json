@@ -282,6 +282,16 @@
                 "category": "Git Tree Compare"
             },
             {
+                "command": "gitTreeCompare.showHeatmap",
+                "title": "Show heatmap",
+                "category": "Git Tree Compare"
+            },
+            {
+                "command": "gitTreeCompare.hideHeatmap",
+                "title": "Hide heatmap",
+                "category": "Git Tree Compare"
+            },
+            {
                 "command": "gitTreeCompare.viewAsList",
                 "title": "View as List",
                 "icon": "$(list-flat)",
@@ -518,6 +528,16 @@
                 {
                     "command": "gitTreeCompare.hideCheckboxes",
                     "when": "view == gitTreeCompare && config.gitTreeCompare.showCheckboxes",
+                    "group": "3_options"
+                },
+                {
+                    "command": "gitTreeCompare.showHeatmap",
+                    "when": "view == gitTreeCompare && !config.gitTreeCompare.heatmap",
+                    "group": "3_options"
+                },
+                {
+                    "command": "gitTreeCompare.hideHeatmap",
+                    "when": "view == gitTreeCompare && config.gitTreeCompare.heatmap",
                     "group": "3_options"
                 },
                 {
