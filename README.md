@@ -8,6 +8,17 @@ In bigger projects with many files it also provides **context**, it gives you a 
 
 <img src="screenshots/main.png" alt="Screenshot of Git Tree Compare view" width="243" />
 
+## Install from GitHub
+
+This fork with the heatmap is not on the Marketplace. You can install the latest release with:
+
+```sh
+curl -sL -o /tmp/git-tree-compare.vsix https://github.com/berhalak/vscode-git-tree-compare/releases/latest/download/git-tree-compare.vsix
+code --install-extension /tmp/git-tree-compare.vsix --force
+```
+
+Run it again to update to a newer release.
+
 ## Features
 
 - Working tree comparison against any chosen branch, tag, or commit
