@@ -153,6 +153,9 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(NAMESPACE + '.sortByRecentlyModified', () => {
         runAfterInit(() => provider!.sortByRecentlyModified());
     });
+    commands.registerCommand(NAMESPACE + '.sortByMostChanged', () => {
+        runAfterInit(() => provider!.sortByMostChanged());
+    });
 
     commands.registerCommand(NAMESPACE + '.openChangesWithDifftool', node => {
         runAfterInit(() => provider!.openChangesWithDifftool(node));

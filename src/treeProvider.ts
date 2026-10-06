@@ -26,7 +26,7 @@ import { API as GitAPI, Repository as GitAPIRepository } from './typings/git';
 import { Octokit } from '@octokit/rest';
 
 
-type SortOrder = 'name' | 'path' | 'status' | 'recentlyModified';
+type SortOrder = 'name' | 'path' | 'status' | 'recentlyModified' | 'mostChanged';
 type ViewMode = 'tree' | 'list';
 type IconStyle = 'status' | 'fileTheme';
 
@@ -404,6 +404,10 @@ class RepositoryComparison {
         return { leftRef: this.mergeBase, rightRef: null };
     }
 
+    private get needsDiffStats(): boolean {
+        return this.host.showDiffStats || this.host.heatmap || this.host.sortOrder === 'mostChanged';
+    }
+
     /** Computes the set of changed files for the active commit filter. */
     private async computeDiff(): Promise<IDiffStatus[]> {
         const filter = this.commitFilter;
@@ -411,7 +415,7 @@ class RepositoryComparison {
             return [];
         }
         const { findRenames, renameThreshold, omitUntrackedFiles, omitUnstagedChanges } = this.host;
-        const showDiffStats = this.host.showDiffStats || this.host.heatmap;
+        const showDiffStats = this.needsDiffStats;
         if (filter.kind === 'range' && (filter.rightRef ?? null) !== null) {
             return diffTrees(this.repository, filter.leftRef!, filter.rightRef!,
                 findRenames, renameThreshold, showDiffStats);
@@ -577,7 +581,7 @@ class RepositoryComparison {
         // Always refresh when sorting by recently modified in list view, as file mtimes may have changed
         const needsRefreshForSorting = this.host.viewAsList && this.host.sortOrder === 'recentlyModified';
 
-        if (fireChangeEvents && (treeHasChanged || needsRefreshForSorting || this.host.showDiffStats || this.host.heatmap)) {
+        if (fireChangeEvents && (treeHasChanged || needsRefreshForSorting || this.needsDiffStats)) {
             this.host.log('Refreshing tree')
             this.host.fireTreeDataChange();
         }
@@ -2066,7 +2070,8 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
                 oldOmitUntrackedFiles != this.omitUntrackedFiles ||
                 oldOmitUnstagedChanges != this.omitUnstagedChanges ||
                 oldShowDiffStats != this.showDiffStats ||
-                oldHeatmap != this.heatmap;
+                oldHeatmap != this.heatmap ||
+                (oldSortOrder != this.sortOrder && (oldSortOrder === 'mostChanged' || this.sortOrder === 'mostChanged'));
 
             // Only repositories that have already been loaded need updating.
             // The rest pick up the new settings when they are first expanded.
@@ -2278,6 +2283,16 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
                         return bTime - aTime;
                     }
                     // Secondary sort by path
+                    return a.dstRelPath.localeCompare(b.dstRelPath);
+                });
+                break;
+            case 'mostChanged':
+                fileElements.sort((a, b) => {
+                    const aChanged = (a.stats && getChangedLines(a.stats)) ?? 0;
+                    const bChanged = (b.stats && getChangedLines(b.stats)) ?? 0;
+                    if (bChanged !== aChanged) {
+                        return bChanged - aChanged;
+                    }
                     return a.dstRelPath.localeCompare(b.dstRelPath);
                 });
                 break;
@@ -2906,6 +2921,11 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
     async sortByRecentlyModified() {
         const config = workspace.getConfiguration(NAMESPACE);
         await config.update('sortOrder', 'recentlyModified', true);
+    }
+
+    async sortByMostChanged() {
+        const config = workspace.getConfiguration(NAMESPACE);
+        await config.update('sortOrder', 'mostChanged', true);
     }
 
     async collapseAll() {
