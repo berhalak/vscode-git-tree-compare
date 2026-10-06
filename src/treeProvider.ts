@@ -107,6 +107,7 @@ interface IComparisonHost {
     readonly omitUntrackedFiles: boolean;
     readonly omitUnstagedChanges: boolean;
     readonly showDiffStats: boolean;
+    readonly heatmap: boolean;
     readonly resetCheckboxOnFileChange: boolean;
     readonly viewAsList: boolean;
     readonly sortOrder: SortOrder;
@@ -143,6 +144,8 @@ class RepositoryComparison {
 
     filesInsideTreeRoot = new Map<FolderAbsPath, IDiffStatus[]>();
     filesOutsideTreeRoot = new Map<FolderAbsPath, IDiffStatus[]>();
+    // Smallest and largest number of changed lines among the files, for the heatmap.
+    changedLinesRange: IHeatRange | undefined = undefined;
 
     checkboxStates = new Map<string, CheckboxStateInfo>();
     searchFilter: string | undefined = undefined;
@@ -242,6 +245,7 @@ class RepositoryComparison {
     clearFiles() {
         this.filesInsideTreeRoot = new Map();
         this.filesOutsideTreeRoot = new Map();
+        this.changedLinesRange = undefined;
     }
 
     private async getStoredBaseRef(): Promise<string | undefined> {
@@ -406,7 +410,8 @@ class RepositoryComparison {
         if (filter.kind === 'empty') {
             return [];
         }
-        const { findRenames, renameThreshold, omitUntrackedFiles, omitUnstagedChanges, showDiffStats } = this.host;
+        const { findRenames, renameThreshold, omitUntrackedFiles, omitUnstagedChanges } = this.host;
+        const showDiffStats = this.host.showDiffStats || this.host.heatmap;
         if (filter.kind === 'range' && (filter.rightRef ?? null) !== null) {
             return diffTrees(this.repository, filter.leftRef!, filter.rightRef!,
                 findRenames, renameThreshold, showDiffStats);
@@ -567,11 +572,12 @@ class RepositoryComparison {
 
         this.filesInsideTreeRoot = filesInsideTreeRoot;
         this.filesOutsideTreeRoot = filesOutsideTreeRoot;
+        this.changedLinesRange = getChangedLinesRange([...filesInsideTreeRoot.values(), ...filesOutsideTreeRoot.values()].flat());
 
         // Always refresh when sorting by recently modified in list view, as file mtimes may have changed
         const needsRefreshForSorting = this.host.viewAsList && this.host.sortOrder === 'recentlyModified';
 
-        if (fireChangeEvents && (treeHasChanged || needsRefreshForSorting || this.host.showDiffStats)) {
+        if (fireChangeEvents && (treeHasChanged || needsRefreshForSorting || this.host.showDiffStats || this.host.heatmap)) {
             this.host.log('Refreshing tree')
             this.host.fireTreeDataChange();
         }
@@ -687,6 +693,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
     sortOrder: SortOrder;
     private autoReveal: boolean;
     showDiffStats: boolean;
+    heatmap: boolean;
 
     // One comparison per repository, keyed by canonical repository root.
     private comparisons = new Map<FolderAbsPath, RepositoryComparison>();
@@ -1755,6 +1762,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         this.sortOrder = config.get<SortOrder>('sortOrder', 'path');
         this.autoReveal = config.get<boolean>('autoReveal', true);
         this.showDiffStats = config.get<boolean>('showDiffStats', false);
+        this.heatmap = config.get<boolean>('heatmap', false);
     }
 
     getTreeItem(element: Element): TreeItem {
@@ -1769,7 +1777,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
                 checkboxState = this.computeFolderCheckboxState(comparison, element);
             }
         }
-        const item = toTreeItem(element, this.openChangesOnSelect, this.iconsMinimal, this.iconStyle, this.showCollapsed, this.viewAsList, this.showDiffStats, checkboxState, this.asAbsolutePath);
+        const item = toTreeItem(element, this.openChangesOnSelect, this.iconsMinimal, this.iconStyle, this.showCollapsed, this.viewAsList, this.showDiffStats, this.heatmap ? comparison?.changedLinesRange : undefined, checkboxState, this.asAbsolutePath);
         if (this.collapseGeneration > 0 && element instanceof FolderElement) {
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.id = getElementId(element) + '#c' + this.collapseGeneration;
@@ -1999,6 +2007,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         const oldSortOrder = this.sortOrder;
         const oldMultiRepositoryView = this.multiRepositoryView;
         const oldShowDiffStats = this.showDiffStats;
+        const oldHeatmap = this.heatmap;
         this.readConfig();
         if (oldshowCheckboxes && !this.showCheckboxes && this.hideCheckedFiles) {
             this.hideCheckedFiles = false;
@@ -2023,7 +2032,8 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
             oldOmitUnstagedChanges != this.omitUnstagedChanges ||
             oldViewAsList != this.viewAsList ||
             oldSortOrder != this.sortOrder ||
-            oldShowDiffStats != this.showDiffStats) {
+            oldShowDiffStats != this.showDiffStats ||
+            oldHeatmap != this.heatmap) {
 
             if (oldMultiRepositoryView != this.multiRepositoryView) {
                 // The layout changed, start from a clean slate.
@@ -2055,7 +2065,8 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
                 (!oldAutoRefresh && this.autoRefresh) ||
                 oldOmitUntrackedFiles != this.omitUntrackedFiles ||
                 oldOmitUnstagedChanges != this.omitUnstagedChanges ||
-                oldShowDiffStats != this.showDiffStats;
+                oldShowDiffStats != this.showDiffStats ||
+                oldHeatmap != this.heatmap;
 
             // Only repositories that have already been loaded need updating.
             // The rest pick up the new settings when they are first expanded.
@@ -3094,21 +3105,25 @@ function formatDiffStats(stats: IDiffStats): string {
 
 class GitTreeCompareFileDecorationProvider implements FileDecorationProvider {
     provideFileDecoration(uri: Uri): ProviderResult<FileDecoration> {
-        if (uri.scheme !== TREE_RESOURCE_SCHEME || !isStatusCode(uri.query)) {
+        if (uri.scheme !== TREE_RESOURCE_SCHEME) {
             return undefined;
         }
-        return new FileDecoration(getStatusBadge(uri.query), getStatusText(uri.query), getStatusColor(uri.query));
+        const heatColor = uri.fragment ? new ThemeColor(`${NAMESPACE}.${uri.fragment}`) : undefined;
+        if (isStatusCode(uri.query)) {
+            return new FileDecoration(getStatusBadge(uri.query), getStatusText(uri.query), heatColor ?? getStatusColor(uri.query));
+        }
+        return heatColor ? new FileDecoration(undefined, undefined, heatColor) : undefined;
     }
 }
 
 function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal: boolean,
-                    iconStyle: IconStyle, showCollapsed: boolean, viewAsList: boolean, showDiffStats: boolean,
+                    iconStyle: IconStyle, showCollapsed: boolean, viewAsList: boolean, showDiffStats: boolean, heatRange: IHeatRange | undefined,
                     checkboxState: TreeItemCheckboxState | undefined,
                     asAbsolutePath: (relPath: string) => string): TreeItem {
     const gitIconRoot = asAbsolutePath('resources/git-icons');
     if (element instanceof FileElement) {
-        const statsText = showDiffStats && element.stats ? formatDiffStats(element.stats) : '';
-        const displayLabel = statsText ? `${element.label}  ${statsText}` : element.label;
+        const statsText = element.stats ? formatDiffStats(element.stats) : '';
+        const displayLabel = showDiffStats && statsText ? `${element.label}  ${statsText}` : element.label;
         const item = new TreeItem(displayLabel);
         // In fileTheme mode the status is already shown via the file decoration
         // tooltip, so avoid mentioning it twice.
@@ -3128,10 +3143,15 @@ function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal
         }
         item.contextValue = element.isSubmodule ? 'submodule' : 'file';
         item.id = getElementId(element);
+        const heatLevel = heatRange && element.stats ? getHeatLevel(element.stats, heatRange) : undefined;
         if (iconStyle === 'fileTheme') {
-            item.resourceUri = toTreeResourceUri(element.dstAbsPath, element.status);
+            item.resourceUri = toTreeResourceUri(element.dstAbsPath, element.status, heatLevel);
             item.iconPath = ThemeIcon.File;
         } else {
+            // Here the icon already shows the status, so the decoration only colors the label.
+            if (heatLevel !== undefined) {
+                item.resourceUri = toTreeResourceUri(element.dstAbsPath, undefined, heatLevel);
+            }
             item.iconPath = path.join(gitIconRoot, toIconName(element.status) + '.svg');
         }
         if (checkboxState !== undefined) {
@@ -3228,8 +3248,58 @@ function uriToAbsPath(uri: Uri): string | undefined {
     return undefined;
 }
 
-function toTreeResourceUri(absPath: string, status?: StatusCode): Uri {
-    return Uri.file(absPath).with({ scheme: TREE_RESOURCE_SCHEME, query: status });
+// The fragment names the heat color, e.g. "heat3" for gitTreeCompare.heat3.
+function toTreeResourceUri(absPath: string, status?: StatusCode, heatLevel?: number): Uri {
+    return Uri.file(absPath).with({
+        scheme: TREE_RESOURCE_SCHEME,
+        query: status,
+        fragment: heatLevel !== undefined ? `heat${heatLevel}` : undefined,
+    });
+}
+
+const HEAT_LEVELS = 10;
+
+interface IHeatRange {
+    min: number;
+    max: number;
+}
+
+function getChangedLines(stats: IDiffStats): number | undefined {
+    if (stats.isBinary) {
+        return undefined;
+    }
+    const changed = (stats.insertions ?? 0) + (stats.deletions ?? 0);
+    return changed > 0 ? changed : undefined;
+}
+
+function getChangedLinesRange(files: IDiffStatus[]): IHeatRange | undefined {
+    let range: IHeatRange | undefined;
+    for (const file of files) {
+        const changed = file.stats && getChangedLines(file.stats);
+        if (changed === undefined) {
+            continue;
+        }
+        range = range
+            ? { min: Math.min(range.min, changed), max: Math.max(range.max, changed) }
+            : { min: changed, max: changed };
+    }
+    return range;
+}
+
+// Splits the range between the least and the most changed file into equal
+// parts on a log scale and returns the part the file falls into, from 1 (coldest)
+// to HEAT_LEVELS. The log scale keeps one huge file from pushing all others into level 1.
+function getHeatLevel(stats: IDiffStats, range: IHeatRange): number | undefined {
+    const changed = getChangedLines(stats);
+    if (changed === undefined) {
+        return undefined;
+    }
+    if (range.max === range.min) {
+        return HEAT_LEVELS;
+    }
+    const position = Math.log(changed / range.min) / Math.log(range.max / range.min);
+    const level = Math.floor(position * HEAT_LEVELS) + 1;
+    return Math.min(level, HEAT_LEVELS);
 }
 
 function toIconName(status: StatusCode) {

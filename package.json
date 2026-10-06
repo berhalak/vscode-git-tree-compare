@@ -42,6 +42,108 @@
     ],
     "main": "./dist/extension",
     "contributes": {
+        "colors": [
+            {
+                "id": "gitTreeCompare.heat1",
+                "description": "Heatmap color 1 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#4C9EF0",
+                    "light": "#0F61B3",
+                    "highContrast": "#4C9EF0",
+                    "highContrastLight": "#0F61B3"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat2",
+                "description": "Heatmap color 2 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#4CDEF0",
+                    "light": "#0FA1B3",
+                    "highContrast": "#4CDEF0",
+                    "highContrastLight": "#0FA1B3"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat3",
+                "description": "Heatmap color 3 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#4CF0C3",
+                    "light": "#0FB386",
+                    "highContrast": "#4CF0C3",
+                    "highContrastLight": "#0FB386"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat4",
+                "description": "Heatmap color 4 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#4CF083",
+                    "light": "#0FB345",
+                    "highContrast": "#4CF083",
+                    "highContrastLight": "#0FB345"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat5",
+                "description": "Heatmap color 5 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#55F04C",
+                    "light": "#18B30F",
+                    "highContrast": "#55F04C",
+                    "highContrastLight": "#18B30F"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat6",
+                "description": "Heatmap color 6 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#95F04C",
+                    "light": "#58B30F",
+                    "highContrast": "#95F04C",
+                    "highContrastLight": "#58B30F"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat7",
+                "description": "Heatmap color 7 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#D5F04C",
+                    "light": "#98B30F",
+                    "highContrast": "#D5F04C",
+                    "highContrastLight": "#98B30F"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat8",
+                "description": "Heatmap color 8 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#F0CC4C",
+                    "light": "#B38F0F",
+                    "highContrast": "#F0CC4C",
+                    "highContrastLight": "#B38F0F"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat9",
+                "description": "Heatmap color 9 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#F08C4C",
+                    "light": "#B34F0F",
+                    "highContrast": "#F08C4C",
+                    "highContrastLight": "#B34F0F"
+                }
+            },
+            {
+                "id": "gitTreeCompare.heat10",
+                "description": "Heatmap color 10 of 10, from the least (1) to the most (10) changed files.",
+                "defaults": {
+                    "dark": "#F04C4C",
+                    "light": "#B30F0F",
+                    "highContrast": "#F04C4C",
+                    "highContrastLight": "#B30F0F"
+                }
+            }
+        ],
         "viewsContainers": {
             "activitybar": [
                 {
@@ -811,6 +913,11 @@
                 "gitTreeCompare.showDiffStats": {
                     "type": "boolean",
                     "description": "Whether to show insertion/deletion counts (+N -N) next to each file.",
+                    "default": false
+                },
+                "gitTreeCompare.heatmap": {
+                    "type": "boolean",
+                    "description": "Whether to color file names by how many lines changed, from blue (least changed file) to red (most changed file).",
                     "default": false
                 }
             }

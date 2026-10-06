@@ -1,5 +1,6 @@
 ## Unreleased
 
+* Add optional heatmap that colors files by how many lines changed, via the new `heatmap` setting
 * Remember the tree/list view mode across restarts via the new `viewMode` setting [#162](https://github.com/letmaik/vscode-git-tree-compare/issues/162)
 
 ## 1.21.0
