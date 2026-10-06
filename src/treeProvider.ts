@@ -3146,6 +3146,10 @@ function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal
                 item.description = '';
             }
         }
+        const changeShare = heatRange && element.stats ? formatChangeShare(element.stats, heatRange) : '';
+        if (changeShare) {
+            item.description = item.description ? `${changeShare}  ${item.description}` : changeShare;
+        }
         item.contextValue = element.isSubmodule ? 'submodule' : 'file';
         item.id = getElementId(element);
         const heatLevel = heatRange && element.stats ? getHeatLevel(element.stats, heatRange) : undefined;
@@ -3267,6 +3271,7 @@ const HEAT_LEVELS = 10;
 interface IHeatRange {
     min: number;
     max: number;
+    total: number;
 }
 
 function getChangedLines(stats: IDiffStats): number | undefined {
@@ -3285,10 +3290,20 @@ function getChangedLinesRange(files: IDiffStatus[]): IHeatRange | undefined {
             continue;
         }
         range = range
-            ? { min: Math.min(range.min, changed), max: Math.max(range.max, changed) }
-            : { min: changed, max: changed };
+            ? { min: Math.min(range.min, changed), max: Math.max(range.max, changed), total: range.total + changed }
+            : { min: changed, max: changed, total: changed };
     }
     return range;
+}
+
+// Share of this file in all changed lines of the comparison, e.g. "12%".
+function formatChangeShare(stats: IDiffStats, range: IHeatRange): string {
+    const changed = getChangedLines(stats);
+    if (changed === undefined) {
+        return '';
+    }
+    const percent = changed / range.total * 100;
+    return percent < 1 ? '<1%' : `${Math.round(percent)}%`;
 }
 
 // Splits the range between the least and the most changed file into equal

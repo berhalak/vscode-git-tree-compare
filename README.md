@@ -125,6 +125,6 @@ comparison changes (a new base, or new commits on `HEAD`).
 
 `gitTreeCompare.showDiffStats` When enabled, shows insertion/deletion counts (+N -N) next to each file name in the tree view. Default is disabled.
 
-`gitTreeCompare.heatmap` When enabled, colors each file name by how many lines changed (insertions + deletions). The range from the least to the most changed file is split into 10 equal parts on a logarithmic scale, colored from light yellow to red. You can change the colors with the `gitTreeCompare.heat1` to `gitTreeCompare.heat10` theme colors in `workbench.colorCustomizations`. Default is disabled.
+`gitTreeCompare.heatmap` When enabled, colors each file name by how many lines changed (insertions + deletions). The range from the least to the most changed file is split into 10 equal parts on a logarithmic scale, colored from light yellow to red. Next to each file it also shows its share of all changed lines, e.g. `12%`. You can change the colors with the `gitTreeCompare.heat1` to `gitTreeCompare.heat10` theme colors in `workbench.colorCustomizations`. Default is disabled.
 
 `gitTreeCompare.multiRepositoryView` [EXPERIMENTAL] When enabled and the workspace contains more than one Git repository, the tree shows one expanded section per repository instead of comparing a single active repository. Each repository keeps its own comparison base, filter and checkbox state. Workspaces with a single repository are unaffected. Default is disabled.
