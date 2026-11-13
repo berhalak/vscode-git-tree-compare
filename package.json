@@ -250,6 +250,26 @@
                 "category": "Git Tree Compare"
             },
             {
+                "command": "gitTreeCompare.changeBaseRelative",
+                "title": "Change Base Relative...",
+                "category": "Git Tree Compare"
+            },
+            {
+                "command": "gitTreeCompare.flattenFolder",
+                "title": "Flatten Folder",
+                "category": "Git Tree Compare"
+            },
+            {
+                "command": "gitTreeCompare.unflattenFolder",
+                "title": "Unflatten Folder",
+                "category": "Git Tree Compare"
+            },
+            {
+                "command": "gitTreeCompare.changeBaseToDefaultBranch",
+                "title": "Change Base to Default Branch",
+                "category": "Git Tree Compare"
+            },
+            {
                 "command": "gitTreeCompare.refresh",
                 "title": "Refresh Repository",
                 "icon": "$(refresh)",
@@ -418,6 +438,14 @@
         "menus": {
             "commandPalette": [
                 {
+                    "command": "gitTreeCompare.flattenFolder",
+                    "when": "false"
+                },
+                {
+                    "command": "gitTreeCompare.unflattenFolder",
+                    "when": "false"
+                },
+                {
                     "command": "gitTreeCompare.commits.selectAll",
                     "when": "config.gitTreeCompare.showCommitsPanel"
                 },
@@ -474,12 +502,12 @@
                 {
                     "command": "gitTreeCompare.changeWorktree",
                     "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes && gitTreeCompare.hasWorktrees",
-                    "group": "1_state"
+                    "group": "1_state@0"
                 },
                 {
                     "command": "gitTreeCompare.changeRepository",
                     "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes && gitOpenRepositoryCount != 1",
-                    "group": "1_state"
+                    "group": "1_state@0"
                 },
                 {
                     "command": "gitTreeCompare.changeRepository",
@@ -489,12 +517,22 @@
                 {
                     "command": "gitTreeCompare.changeBase",
                     "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes",
-                    "group": "1_state"
+                    "group": "1_state@1"
+                },
+                {
+                    "command": "gitTreeCompare.changeBaseToDefaultBranch",
+                    "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes",
+                    "group": "1_state@2"
+                },
+                {
+                    "command": "gitTreeCompare.changeBaseRelative",
+                    "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes",
+                    "group": "1_state@3"
                 },
                 {
                     "command": "gitTreeCompare.compareGitHubPullRequest",
                     "when": "view == gitTreeCompare && !gitTreeCompare.showRepositoryNodes",
-                    "group": "1_state"
+                    "group": "1_state@4"
                 },
                 {
                     "command": "gitTreeCompare.openAllChanges",
@@ -514,7 +552,7 @@
                 {
                     "command": "gitTreeCompare.refreshAll",
                     "when": "view == gitTreeCompare",
-                    "group": "1_state"
+                    "group": "1_state@5"
                 },
                 {
                     "command": "gitTreeCompare.refreshAll",
@@ -614,6 +652,16 @@
             ],
             "view/item/context": [
                 {
+                    "command": "gitTreeCompare.flattenFolder",
+                    "when": "view == gitTreeCompare && viewItem == folder && !gitTreeCompare.viewAsList",
+                    "group": "3_flatten"
+                },
+                {
+                    "command": "gitTreeCompare.unflattenFolder",
+                    "when": "view == gitTreeCompare && viewItem == folder.flattened && !gitTreeCompare.viewAsList",
+                    "group": "3_flatten"
+                },
+                {
                     "command": "gitTreeCompare.changeWorktree",
                     "when": "view == gitTreeCompare && viewItem == repo",
                     "group": "1_state"
@@ -676,7 +724,7 @@
                 },
                 {
                     "command": "gitTreeCompare.discardChanges",
-                    "when": "view == gitTreeCompare && viewItem == folder",
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/",
                     "group": "inline"
                 },
                 {
@@ -701,7 +749,7 @@
                 },
                 {
                     "command": "gitTreeCompare.discardChanges",
-                    "when": "view == gitTreeCompare && viewItem == folder",
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/",
                     "group": "2_discard"
                 },
                 {
@@ -731,7 +779,7 @@
                 },
                 {
                     "command": "gitTreeCompare.openAllChanges",
-                    "when": "view == gitTreeCompare && viewItem == folder"
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/"
                 },
                 {
                     "command": "gitTreeCompare.openChangedFiles",
@@ -739,7 +787,7 @@
                 },
                 {
                     "command": "gitTreeCompare.openChangedFiles",
-                    "when": "view == gitTreeCompare && viewItem == folder"
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/"
                 },
                 {
                     "command": "gitTreeCompare.openAllChanges",
@@ -748,7 +796,7 @@
                 },
                 {
                     "command": "gitTreeCompare.openAllChanges",
-                    "when": "view == gitTreeCompare && viewItem == folder",
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/",
                     "group": "inline"
                 },
                 {
@@ -758,7 +806,7 @@
                 },
                 {
                     "command": "gitTreeCompare.openChangedFiles",
-                    "when": "view == gitTreeCompare && viewItem == folder",
+                    "when": "view == gitTreeCompare && viewItem =~ /^folder/",
                     "group": "inline"
                 },
                 {
@@ -881,6 +929,14 @@
                     "type": "boolean",
                     "description": "Whether to compact (flatten) single-child folders into a single tree element. Useful for Java package structures, for example. May have a performance impact for large diff trees.",
                     "default": true
+                },
+                "gitTreeCompare.flattenedFolders": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Folders that show all their changed files directly, without subfolders. Paths are relative to the repository root, for example \"app/client\".",
+                    "default": []
                 },
                 "gitTreeCompare.showCheckboxes": {
                     "type": "boolean",

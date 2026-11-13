@@ -7,7 +7,7 @@ import { TreeDataProvider, TreeItem, TreeItemCollapsibleState,
          QuickPickItem, ProgressLocation, Memento, OutputChannel,
          workspace, commands, window, env, WorkspaceFoldersChangeEvent, TreeView, ThemeIcon, TreeItemCheckboxState, TreeCheckboxChangeEvent, authentication, TextEditor, RelativePattern,
          TabInputTextDiff, Range, TextEditorRevealType,
-         FileDecorationProvider, FileDecoration, ProviderResult, ThemeColor } from 'vscode'
+         FileDecorationProvider, FileDecoration, ProviderResult, ThemeColor, ConfigurationTarget } from 'vscode'
 import { NAMESPACE } from './constants'
 import { Repository, Git } from './git/git'
 import { Ref, RefType } from './git/api/git'
@@ -689,6 +689,8 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
     renameThreshold: number;
     private showCollapsed: boolean;
     private compactFolders: boolean;
+    // Repo-relative paths of folders that show all their files without subfolders, e.g. 'app/client'.
+    private flattenedFolders: string[];
     private showCheckboxes: boolean;
     resetCheckboxOnFileChange: boolean;
     omitUntrackedFiles: boolean;
@@ -727,6 +729,9 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
 
     // UI state
     private treeView: TreeView<Element>;
+    // Used to tell a click on an already selected file from a click that selects it.
+    private selectionChangedSinceClick = false;
+    private lastFileClick: { path: string, time: number } | undefined;
     private parentMap: Map<string, Element> = new Map();
     private elementMap: Map<string, FileElement> = new Map();
     private pendingRefreshRoots = new Set<FolderAbsPath>();
@@ -1114,6 +1119,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
 
         this.disposables.push(treeView.onDidChangeCheckboxState(this.handleChangeCheckboxState, this));
         this.disposables.push(treeView.onDidChangeSelection(e => {
+            this.selectionChangedSinceClick = true;
             const repositoryRoot = e.selection[0]?.repositoryRoot;
             if (repositoryRoot) {
                 this.bindCommitsTo(repositoryRoot);
@@ -1758,6 +1764,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         this.renameThreshold = config.get<number>('renameThreshold', 50);
         this.showCollapsed = config.get<boolean>('collapsed', false);
         this.compactFolders = config.get<boolean>('compactFolders', false);
+        this.flattenedFolders = config.get<string[]>('flattenedFolders', []);
         this.showCheckboxes = config.get<boolean>('showCheckboxes', false);
         this.resetCheckboxOnFileChange = config.get<boolean>('resetCheckboxOnFileChange', false);
         this.omitUntrackedFiles = config.get<boolean>('omitUntrackedFiles', false);
@@ -1781,7 +1788,13 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
                 checkboxState = this.computeFolderCheckboxState(comparison, element);
             }
         }
-        const item = toTreeItem(element, this.openChangesOnSelect, this.iconsMinimal, this.iconStyle, this.showCollapsed, this.viewAsList, this.showDiffStats, this.heatmap ? comparison?.changedLinesRange : undefined, checkboxState, this.asAbsolutePath);
+        const heatRange = this.heatmap ? comparison?.changedLinesRange : undefined;
+        const folderStats = heatRange && comparison && element instanceof FolderElement
+            ? this.computeFolderStats(comparison, element) : undefined;
+        const item = toTreeItem(element, this.iconsMinimal, this.iconStyle, this.showCollapsed, this.viewAsList, this.showDiffStats, heatRange, folderStats, checkboxState, this.asAbsolutePath);
+        if (element instanceof FolderElement && comparison && this.isFlattenedFolder(comparison, element.dstAbsPath)) {
+            item.contextValue = 'folder.flattened';
+        }
         if (this.collapseGeneration > 0 && element instanceof FolderElement) {
             item.collapsibleState = TreeItemCollapsibleState.Collapsed;
             item.id = getElementId(element) + '#c' + this.collapseGeneration;
@@ -1792,6 +1805,43 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
     getParent(element: Element): Element | undefined {
         const id = getElementId(element);
         return this.parentMap.get(id);
+    }
+
+    private isFlattenedFolder(comparison: RepositoryComparison, folderAbsPath: string): boolean {
+        if (this.flattenedFolders.length === 0) {
+            return false;
+        }
+        return this.flattenedFolders.includes(toRepoRelativePath(comparison, folderAbsPath));
+    }
+
+    async setFolderFlattened(folder: FolderElement, flattened: boolean) {
+        const comparison = this.getExistingComparison(folder.repositoryRoot);
+        if (!comparison) {
+            return;
+        }
+        const relPath = toRepoRelativePath(comparison, folder.dstAbsPath);
+        const others = this.flattenedFolders.filter(p => p !== relPath);
+        const config = workspace.getConfiguration(NAMESPACE);
+        await config.update('flattenedFolders', flattened ? [...others, relPath] : others, ConfigurationTarget.Workspace);
+    }
+
+    // Sum of changed lines of all text files under the folder, for the heatmap.
+    private computeFolderStats(comparison: RepositoryComparison, folder: FolderElement): IDiffStats | undefined {
+        const files = folder.useFilesOutsideTreeRoot ? comparison.filesOutsideTreeRoot : comparison.filesInsideTreeRoot;
+        let insertions = 0;
+        let deletions = 0;
+        for (const [folderPath, fileEntries] of files.entries()) {
+            if (folderPath !== folder.dstAbsPath && !folderPath.startsWith(folder.dstAbsPath + path.sep)) {
+                continue;
+            }
+            for (const file of fileEntries) {
+                if (file.stats && !file.stats.isBinary) {
+                    insertions += file.stats.insertions ?? 0;
+                    deletions += file.stats.deletions ?? 0;
+                }
+            }
+        }
+        return insertions + deletions > 0 ? { insertions, deletions, isBinary: false } : undefined;
     }
 
     private computeFolderCheckboxState(comparison: RepositoryComparison, folder: FolderElement): TreeItemCheckboxState {
@@ -2004,6 +2054,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         const oldFindRenames = this.findRenames;
         const oldRenameThreshold = this.renameThreshold;
         const oldCompactFolders = this.compactFolders;
+        const oldFlattenedFolders = this.flattenedFolders;
         const oldshowCheckboxes = this.showCheckboxes;
         const oldOmitUntrackedFiles = this.omitUntrackedFiles;
         const oldOmitUnstagedChanges = this.omitUnstagedChanges;
@@ -2031,6 +2082,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
             oldFindRenames != this.findRenames ||
             oldRenameThreshold != this.renameThreshold ||
             oldCompactFolders != this.compactFolders ||
+            oldFlattenedFolders.join('\n') != this.flattenedFolders.join('\n') ||
             oldshowCheckboxes != this.showCheckboxes ||
             oldOmitUntrackedFiles != this.omitUntrackedFiles ||
             oldOmitUnstagedChanges != this.omitUnstagedChanges ||
@@ -2148,7 +2200,7 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         const files = useFilesOutsideTreeRoot ? comparison.filesOutsideTreeRoot : comparison.filesInsideTreeRoot;
         const relPathBase = useFilesOutsideTreeRoot ? comparison.repoRoot : comparison.treeRoot;
 
-        if (this.viewAsList) {
+        if (this.viewAsList || this.isFlattenedFolder(comparison, folder)) {
             // add files of direct and nested subfolders
             const folders: string[] = [];
             for (const folder2 of files.keys()) {
@@ -2235,6 +2287,9 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         // (path sorting uses the existing default logic)
         if (this.viewAsList && this.sortOrder !== 'path') {
             this.applySorting(entries);
+        } else if (!this.viewAsList && this.isFlattenedFolder(comparison, folder)) {
+            // A flattened folder shows only file names, so sort by name.
+            entries.sort((a, b) => a.label.localeCompare(b.label));
         }
 
         return entries
@@ -2323,6 +2378,48 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
         }
         const status = comparison.findFile(uri.fsPath);
         return status ? { comparison, status } : undefined;
+    }
+
+    // Runs when a file row is clicked. With checkboxes shown, clicking a file that
+    // is already selected toggles its checkbox instead of opening it again, and
+    // double clicking a file opens it and checks its checkbox.
+    async clickFile(fileEntry: FileElement) {
+        const now = Date.now();
+        const last = this.lastFileClick;
+        const isSameFile = last?.path === fileEntry.dstAbsPath;
+        const isDoubleClick = isSameFile && now - last!.time <= DOUBLE_CLICK_MS;
+        const isReselect = isSameFile && !isDoubleClick && !this.selectionChangedSinceClick;
+        this.selectionChangedSinceClick = false;
+        this.lastFileClick = { path: fileEntry.dstAbsPath, time: now };
+        if (this.showCheckboxes && isReselect) {
+            this.toggleCheckbox(fileEntry);
+            return;
+        }
+        if (this.showCheckboxes && isDoubleClick) {
+            this.setCheckbox(fileEntry, TreeItemCheckboxState.Checked);
+        }
+        if (this.openChangesOnSelect) {
+            await this.openChanges(fileEntry);
+        } else {
+            await this.openFile([fileEntry]);
+        }
+    }
+
+    private toggleCheckbox(fileEntry: FileElement) {
+        const comparison = this.getExistingComparison(fileEntry.repositoryRoot);
+        const current = comparison?.checkboxStates.get(fileEntry.dstAbsPath)?.state;
+        this.setCheckbox(fileEntry, current === TreeItemCheckboxState.Checked
+            ? TreeItemCheckboxState.Unchecked
+            : TreeItemCheckboxState.Checked);
+    }
+
+    private setCheckbox(fileEntry: FileElement, state: TreeItemCheckboxState) {
+        const comparison = this.getExistingComparison(fileEntry.repositoryRoot);
+        if (!comparison) {
+            return;
+        }
+        comparison.checkboxStates.set(fileEntry.dstAbsPath, { state, timestamp: Date.now() });
+        this._onDidChangeTreeData.fire();
     }
 
     async openChanges(fileEntry?: FileElement) {
@@ -2607,6 +2704,54 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
             throw new Error("unsupported item type");
         }
 
+        this.changeBase(comparison, baseRef);
+    }
+
+    async changeBaseToDefaultBranch(entry?: RefElement | RepositoryElement) {
+        const comparison = await this.resolveComparison(entry);
+        if (!comparison) {
+            window.showErrorMessage('No repository selected');
+            return;
+        }
+        const baseRef = await getDefaultBranch(comparison.repository, await comparison.repository.getHEAD());
+        if (!baseRef) {
+            window.showErrorMessage('Could not find the default branch');
+            return;
+        }
+        this.changeBase(comparison, baseRef);
+    }
+
+    // Lists the last commits of HEAD. Picking one shows the changes from that
+    // commit up to now. The base is stored as HEAD~N, so it moves along with new commits.
+    async promptChangeBaseRelative(entry?: RefElement | RepositoryElement) {
+        const comparison = await this.resolveComparison(entry);
+        if (!comparison) {
+            window.showErrorMessage('No repository selected');
+            return;
+        }
+        const result = await comparison.repository.exec(
+            ['log', '--first-parent', `-n${RELATIVE_BASE_COMMITS}`, '--format=%h%x00%s']);
+        const picks = result.stdout.split('\n').filter(line => line).map((line, i) => {
+            const [hash, subject] = line.split('\0');
+            const count = i + 1;
+            return {
+                label: subject,
+                description: `${hash} · last ${count} commit${count === 1 ? '' : 's'}`,
+                baseRef: `HEAD~${count}`,
+            };
+        });
+        const choice = await window.showQuickPick(picks, { placeHolder: 'Show changes since this commit' });
+        if (!choice) {
+            return;
+        }
+        if (!await comparison.isCommitExisting(choice.baseRef)) {
+            window.showErrorMessage('This is the first commit of the repository, there is nothing before it to compare with');
+            return;
+        }
+        this.changeBase(comparison, choice.baseRef);
+    }
+
+    private changeBase(comparison: RepositoryComparison, baseRef: string) {
         if (comparison.baseRef === baseRef) {
             return;
         }
@@ -3141,9 +3286,9 @@ class GitTreeCompareFileDecorationProvider implements FileDecorationProvider {
     }
 }
 
-function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal: boolean,
+function toTreeItem(element: Element, iconsMinimal: boolean,
                     iconStyle: IconStyle, showCollapsed: boolean, viewAsList: boolean, showDiffStats: boolean, heatRange: IHeatRange | undefined,
-                    checkboxState: TreeItemCheckboxState | undefined,
+                    folderStats: IDiffStats | undefined, checkboxState: TreeItemCheckboxState | undefined,
                     asAbsolutePath: (relPath: string) => string): TreeItem {
     const gitIconRoot = asAbsolutePath('resources/git-icons');
     if (element instanceof FileElement) {
@@ -3187,9 +3332,8 @@ function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal
             item.checkboxState = checkboxState;
         }
         if (!element.isSubmodule) {
-            const command = openChangesOnSelect ? 'openChanges' : 'openFile';
             item.command = {
-                command: NAMESPACE + '.' + command,
+                command: NAMESPACE + '.clickFile',
                 arguments: [element],
                 title: ''
             };
@@ -3232,11 +3376,19 @@ function toTreeItem(element: Element, openChangesOnSelect: boolean, iconsMinimal
         if (checkboxState !== undefined) {
             item.checkboxState = checkboxState;
         }
+        if (heatRange && folderStats) {
+            item.description = formatChangeShare(folderStats, heatRange);
+        }
+        // A folder has more changed lines than any file in it, so it usually gets a hot color.
+        const heatLevel = heatRange && folderStats ? getHeatLevel(folderStats, heatRange) : undefined;
         if (!iconsMinimal) {
             if (iconStyle === 'fileTheme') {
-                item.resourceUri = toTreeResourceUri(element.dstAbsPath);
+                item.resourceUri = toTreeResourceUri(element.dstAbsPath, undefined, heatLevel);
                 item.iconPath = ThemeIcon.Folder;
             } else {
+                if (heatLevel !== undefined) {
+                    item.resourceUri = toTreeResourceUri(element.dstAbsPath, undefined, heatLevel);
+                }
                 item.iconPath = new ThemeIcon('folder-opened');
             }
         }
@@ -3286,7 +3438,18 @@ function toTreeResourceUri(absPath: string, status?: StatusCode, heatLevel?: num
     });
 }
 
+// Path of the folder inside the repository with '/' separators, e.g. 'app/client'.
+function toRepoRelativePath(comparison: RepositoryComparison, absPath: string): string {
+    return path.relative(comparison.repoRoot, absPath).split(path.sep).join('/');
+}
+
+// Number of commits listed by Change Base Relative.
+const RELATIVE_BASE_COMMITS = 10;
+
 const HEAT_LEVELS = 10;
+
+// Two clicks on the same file closer than this are a double click.
+const DOUBLE_CLICK_MS = 500;
 
 interface IHeatRange {
     min: number;

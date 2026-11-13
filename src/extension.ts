@@ -34,6 +34,10 @@ export function activate(context: ExtensionContext) {
         });
     });
 
+    commands.registerCommand(NAMESPACE + '.clickFile', node => {
+        runAfterInit(() => provider!.clickFile(node));
+    });
+
     commands.registerCommand(NAMESPACE + '.openFile', (node, nodes) => {
         runAfterInit(() => {
             provider!.openFile(nodes || [node]);
@@ -70,6 +74,26 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(NAMESPACE + '.changeBase', node => {
         runAfterInit(() => {
             provider!.promptChangeBase(node);
+        });
+    });
+    commands.registerCommand(NAMESPACE + '.flattenFolder', node => {
+        runAfterInit(() => {
+            provider!.setFolderFlattened(node, true);
+        });
+    });
+    commands.registerCommand(NAMESPACE + '.unflattenFolder', node => {
+        runAfterInit(() => {
+            provider!.setFolderFlattened(node, false);
+        });
+    });
+    commands.registerCommand(NAMESPACE + '.changeBaseToDefaultBranch', node => {
+        runAfterInit(() => {
+            provider!.changeBaseToDefaultBranch(node);
+        });
+    });
+    commands.registerCommand(NAMESPACE + '.changeBaseRelative', node => {
+        runAfterInit(() => {
+            provider!.promptChangeBaseRelative(node);
         });
     });
     commands.registerCommand(NAMESPACE + '.compareGitHubPullRequest', node => {
