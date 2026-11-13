@@ -135,6 +135,12 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand(NAMESPACE + '.hideHeatmap', () => {
         runAfterInit(() => provider!.showHeatmap(false));
     });
+    commands.registerCommand(NAMESPACE + '.showCommitsPanel', () => {
+        workspace.getConfiguration(NAMESPACE).update('showCommitsPanel', true, true);
+    });
+    commands.registerCommand(NAMESPACE + '.hideCommitsPanel', () => {
+        workspace.getConfiguration(NAMESPACE).update('showCommitsPanel', false, true);
+    });
     commands.registerCommand(NAMESPACE + '.viewAsList', () => {
         runAfterInit(() => provider!.viewAsTree(false));
     });
@@ -187,6 +193,9 @@ export function activate(context: ExtensionContext) {
 
     commands.registerCommand(NAMESPACE + '.commits.selectAll', () => {
         commitsProvider?.selectAll();
+    });
+    commands.registerCommand(NAMESPACE + '.commits.showOnly', element => {
+        commitsProvider?.showOnly(element);
     });
     commands.registerCommand(NAMESPACE + '.commits.deselectAll', () => {
         commitsProvider?.deselectAll();

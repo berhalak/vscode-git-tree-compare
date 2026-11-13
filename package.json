@@ -312,6 +312,16 @@
                 "category": "Git Tree Compare"
             },
             {
+                "command": "gitTreeCompare.showCommitsPanel",
+                "title": "Show commits panel",
+                "category": "Git Tree Compare"
+            },
+            {
+                "command": "gitTreeCompare.hideCommitsPanel",
+                "title": "Hide commits panel",
+                "category": "Git Tree Compare"
+            },
+            {
                 "command": "gitTreeCompare.viewAsList",
                 "title": "View as List",
                 "icon": "$(list-flat)",
@@ -417,6 +427,11 @@
                 "category": "Git Tree Compare"
             },
             {
+                "command": "gitTreeCompare.commits.showOnly",
+                "title": "Show Only This Commit",
+                "category": "Git Tree Compare"
+            },
+            {
                 "command": "gitTreeCompare.commits.deselectAll",
                 "title": "Deselect All Commits",
                 "icon": "$(close-all)",
@@ -437,6 +452,10 @@
         ],
         "menus": {
             "commandPalette": [
+                {
+                    "command": "gitTreeCompare.commits.showOnly",
+                    "when": "false"
+                },
                 {
                     "command": "gitTreeCompare.flattenFolder",
                     "when": "false"
@@ -587,6 +606,16 @@
                 {
                     "command": "gitTreeCompare.hideHeatmap",
                     "when": "view == gitTreeCompare && config.gitTreeCompare.heatmap",
+                    "group": "3_options"
+                },
+                {
+                    "command": "gitTreeCompare.showCommitsPanel",
+                    "when": "view == gitTreeCompare && !config.gitTreeCompare.showCommitsPanel",
+                    "group": "3_options"
+                },
+                {
+                    "command": "gitTreeCompare.hideCommitsPanel",
+                    "when": "view == gitTreeCompare && config.gitTreeCompare.showCommitsPanel",
                     "group": "3_options"
                 },
                 {

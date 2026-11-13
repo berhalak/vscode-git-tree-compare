@@ -54,6 +54,7 @@ export interface ComparisonHost {
 }
 
 const UNCOMMITTED_ID = 'uncommitted';
+const SHOW_ONLY_COMMAND = 'gitTreeCompare.commits.showOnly';
 
 export class UncommittedElement {
     constructor(public summary: IUncommittedSummary) {}
@@ -264,6 +265,16 @@ export class CommitsTreeProvider implements TreeDataProvider<CommitListElement>,
         await this.applyFilter();
     }
 
+    // Shows only the changes of the clicked entry, compared to its parent.
+    async showOnly(element: CommitListElement): Promise<void> {
+        const id = elementId(element);
+        for (const other of this.orderedIds()) {
+            this.checked.set(other, other === id);
+        }
+        this._onDidChangeTreeData.fire();
+        await this.applyFilter();
+    }
+
     async deselectAll(): Promise<void> {
         this.checked.clear();
         for (const c of this.commits) {
@@ -294,6 +305,7 @@ export class CommitsTreeProvider implements TreeDataProvider<CommitListElement>,
             }
             tooltip.appendMarkdown(`\n\n${formatSummary(c.fileCount, c.insertions, c.deletions)}`);
             item.tooltip = tooltip;
+            item.command = { command: SHOW_ONLY_COMMAND, arguments: [element], title: '' };
             return item;
         }
         const s = element.summary;
@@ -304,6 +316,7 @@ export class CommitsTreeProvider implements TreeDataProvider<CommitListElement>,
         item.contextValue = 'uncommitted';
         item.checkboxState = this.isChecked(UNCOMMITTED_ID) ? TreeItemCheckboxState.Checked : TreeItemCheckboxState.Unchecked;
         item.tooltip = 'Uncommitted changes in the working tree (compared to HEAD)';
+        item.command = { command: SHOW_ONLY_COMMAND, arguments: [element], title: '' };
         return item;
     }
 
