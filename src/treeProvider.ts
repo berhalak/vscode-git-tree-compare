@@ -2497,14 +2497,13 @@ export class GitTreeCompareProvider implements TreeDataProvider<Element>, Dispos
     }
 
     async doOpenFile(comparison: RepositoryComparison, dstAbsPath: string, status: StatusCode, preview=false) {
-        const { leftRef, rightRef } = comparison.getDiffEndpoints();
-        const right = rightRef === null
-            ? Uri.file(dstAbsPath)
-            : this.gitApi.toGitUri(Uri.file(dstAbsPath), rightRef);
-        const left = this.gitApi.toGitUri(Uri.file(dstAbsPath), leftRef);
-        const uri = status === 'D' ? left : right;
+        // Opens the editable file on disk. Only a deleted file is opened from git, read-only.
+        const uri = status === 'D'
+            ? this.gitApi.toGitUri(Uri.file(dstAbsPath), comparison.getDiffEndpoints().leftRef)
+            : Uri.file(dstAbsPath);
         const options: TextDocumentShowOptions = {
-            preview: preview
+            preview: preview,
+            selection: findOpenSelection(dstAbsPath),
         };
         return commands.executeCommand('vscode.open', uri, options);
     }
@@ -3436,6 +3435,18 @@ function toTreeResourceUri(absPath: string, status?: StatusCode, heatLevel?: num
         query: status,
         fragment: heatLevel !== undefined ? `heat${heatLevel}` : undefined,
     });
+}
+
+// Cursor position in an open editor of this file, e.g. the right side of its diff,
+// so the file opens at the same line. Prefers the active editor.
+function findOpenSelection(absPath: string): Range | undefined {
+    const editors = [window.activeTextEditor, ...window.visibleTextEditors];
+    const editor = editors.find(e => e?.document.uri.fsPath === absPath);
+    if (!editor) {
+        return undefined;
+    }
+    const position = editor.selection.active;
+    return new Range(position, position);
 }
 
 // Path of the folder inside the repository with '/' separators, e.g. 'app/client'.
